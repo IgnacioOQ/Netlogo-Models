@@ -1,14 +1,32 @@
 extensions [ nw ]
 
 turtles-own [
-  X
+  ; General variable
+  X L
+
+  ; Segregation variables
+  happy?
+  similar-nearby      ;; how many neighboring patches have a turtle with my color?
+  other-nearby        ;; how many have a turtle of another color?
+  total-nearby        ;; sum of previous two variables
+  my-%-similar-wanted ;; the threshold for this particular turtle
+
+  ; Difussion varialbes
   infected?           ;; if true, the turtle is infectious
   resistant?          ;; if true, the turtle can't be infected
   alive?              ;; if true, the turtleis dead and will appear in grey
   virus-check-timer   ;; number of ticks since this turtle's last virus-check
 ]
 
-globals [ Z Y K P Q]
+globals [
+  ; General Variables
+  Z Y K P Q
+
+; Segregation Variables
+  percent-similar  ;; on the average, what percent of a turtle's neighbors
+                   ;; are the same color as that turtle?
+  percent-unhappy  ;; what percent of the turtles are unhappy?
+]
 
 ; CREATE NODES
 to setup
@@ -24,6 +42,7 @@ end
 ; CREATE NETWORKS
 
 ; Erdos-Renyi
+
 to setupER1
   setup
   ask links [ die ]
@@ -163,240 +182,74 @@ to wheel.nw
   ask turtles [set shape "person"]
 end
 
-; Clustering
+; GENERALIZED SEGREGATION
 
-;Increasing Clustering
-
-to increase-clustering-randomly ;find an open triplet and close it. If there is no open triplet, create random links until there is one, and then close it.
-  ask turtles [
-    set color blue
-    set X 0]
-  set P 0
-
-  while [P = 0][
-    ask one-of turtles with [X = 0][
-      set X 1
-      ask link-neighbors [
-        set color red] ; look at the neighbors of a random node and color them red. Let this be our first random node.
-    if ((count turtles with [color = red]) > 1) [
-      set K ([who] of one-of turtles with [color = red])
-      ask turtle K [
-        ask link-neighbors [ if (color = red) [set color blue]] ;if that second is already forming a triplet, set the third node back to blue. Now red nodes are linked to the first but not to the second node.
-        if ((count turtles with [color = red]) > 1) [
-          ask one-of other turtles with [(color = red)] [
-            create-link-with turtle K
-            set P 1]]]]] ;if there are sufficient red nodes left, pick one at random and connect it with our second node. There by forming a new triplet.
-    ask turtles [set color blue]
-    if ((count turtles with [X = 0]) = 0) [set P 2]] ;if all nodes were explored and no open triplets were encountered, exit the while loop.
-
-  if (P != 1) [try-again] ;add 1 random links if there were not enough triplets
-
-  ask turtles [
-    set color blue
-    set X 0]
-end
-
-to try-again
-  increase-degree-randomly
-end
-
-to increase-clustering-randomly2 ;find an open triplet and sever one of the links generating the triplet
-  ask turtles [
-    set color blue
-    set X 0]
-  set P 0
-
-  while [P = 0][
-    ask one-of turtles with [X = 0][
-      set color yellow
-      set Q [who] of self
-      set X 1
-      ask link-neighbors [
-        set color red] ; look at the neighbors of a random node and color them red. Let this be our first random node.
-    if ((count turtles with [color = red]) > 1) [
-      set K ([who] of one-of turtles with [color = red])
-      ask turtle K [
-        ask link-neighbors [ if (color = red) [set color blue]] ;if that second is already forming a triplet, set the third node back to blue. Now red nodes are linked to the first but not to the second node.
-        if ((count turtles with [color = red]) > 1) [
-          ask one-of other turtles with [(color = red)] [
-            create-link-with turtle K
-            ifelse (Q > K) [ask link K Q [die]][ask link Q K [die]]
-            set P 1]]]]] ;if there are sufficient red nodes left, that means that there are open triplets, so we sever the link generating it
-    ask turtles [set color blue]
-    if ((count turtles with [X = 0]) = 0) [set P 2]] ;if all nodes were explored and no open triplets were encountered, exit the while loop.
-
-  if (P != 1) [try-again] ;add 1 random links if there were not enough triplets
-
-  ask turtles [
-    set color blue
-    set X 0]
-end
-
-to decrease-clustering-randomly ;find a closed triplet and kill one of the links so its now open
-set P 0
-while [P = 0] [
-    ask turtles [set color blue]
-    ask one-of links with [color != red][
-      ask both-ends [set color red]
-      ask one-of turtles with [color = red] [set color yellow]
-      ask one-of turtles with [color = red] [
-        ask link-neighbors [if (color != yellow) [set color green]]]
-      ask one-of turtles with [color = yellow] [
-        ask link-neighbors [
-          if (color = green) [set color gray]]]
-      ifelse (count turtles with [color = gray] > 0) [die] [set color red]]
-      if (count turtles with [color = gray] > 0) [set P 1]
-      if (count links with [color != red] = 0) [set P 1]]
-ask turtles [set color blue]
-ask links [set color gray]
-end
-
-to decrease-degree-randomly
-  ask one-of links [die]
-end
-
-to increase-degree-randomly
-  ask turtles [set color blue]
-  ask one-of turtles [
-    ask link-neighbors [ set color red ]
-    if (count turtles with [color = blue] > 1) [create-link-with one-of other turtles with [color = blue]]]
-  ask turtles [set color blue]
-end
-
-to setup-clustering-degree
-  let top-degree (Approx-Average-Degree + random-float 1)
-  let bot-degree (Approx-Average-Degree - random-float 1)
-  let top-clust (Approx-M-L-Clustering + random-float 0.03)
-  let bot-clust (Approx-M-L-Clustering - random-float 0.03)
-  set Q 0
-  while [Q = 0][
-    let avgdg ((2 * count links) / count turtles)
-    let avgcl (mean [ nw:clustering-coefficient ] of turtles)
-    while [avgdg > top-degree] [
-      decrease-degree-randomly
-      set avgdg ((2 * count links) / count turtles)]
-    while [avgdg < bot-degree] [
-      increase-degree-randomly
-      set avgdg ((2 * count links) / count turtles)]
-    while [avgcl > top-clust] [
-      decrease-clustering-randomly
-      set avgcl (mean [ nw:clustering-coefficient ] of turtles)]
-     while [avgcl < bot-clust] [
-      increase-clustering-randomly
-      increase-clustering-randomly2
-      set avgcl (mean [ nw:clustering-coefficient ] of turtles)]
-     while [avgdg > top-degree] [
-      decrease-degree-randomly
-      set avgdg ((2 * count links) / count turtles)]
-    tick
-    if ((((bot-degree < avgdg) and (avgdg < top-degree)) and (bot-clust < avgcl)) and (avgcl < top-clust)) [set Q 1]
+to setup-n-neighbors
+  clear-all
+  create-turtles num-nodes [
+    set shape "person"
+    setxy random-xcor random-ycor
   ]
+  ask turtles [
+  set L (n-neighbors)
+  while [count my-links < L] [create-link-with one-of other turtles]]
 end
-
-to setup-clustering-degree2
-  let top-degree (Approx-Average-Degree + random-float 1)
-  let bot-degree (Approx-Average-Degree - random-float 1)
-  let top-clust (Approx-M-L-Clustering + random-float 0.03)
-  let bot-clust (Approx-M-L-Clustering - random-float 0.03)
-  set K 0
-  while [K = 0][
-   let avgdg ((2 * count links) / count turtles)
-   let avgcl (mean [ nw:clustering-coefficient ] of turtles)
-   setup-clustering
-   setup-degree
-   if ((((bot-degree < avgdg) and (avgdg < top-degree)) and (bot-clust < avgcl)) and (avgcl < top-clust)) [set K 1]
-  ]
-end
-
-to setup-clustering-degree3
-  let top-degree (Approx-Average-Degree + random-float 1)
-  let bot-degree (Approx-Average-Degree - random-float 1)
-  let top-clust (Approx-M-L-Clustering + random-float 0.03)
-  let bot-clust (Approx-M-L-Clustering - random-float 0.03)
-  let avgdg ((2 * count links) / count turtles)
-  let avgcl (mean [ nw:clustering-coefficient ] of turtles)
-  if ((((bot-degree < avgdg) and (avgdg < top-degree)) and (bot-clust < avgcl)) and (avgcl < top-clust)) [
-    save-clustering-degree
-    stop
-    ]
-  setup-clustering
-  setup-degree
-  setup-clustering
-  tick
-  if (ticks > 7) [
-    save-clustering-degree
-    stop
-    ]
-end
-
-to setup-clustering-degree4
-  let top-degree (Approx-Average-Degree + random-float 1)
-  let bot-degree (Approx-Average-Degree - random-float 1)
-  let top-clust (Approx-M-L-Clustering + random-float 0.03)
-  let bot-clust (Approx-M-L-Clustering - random-float 0.03)
-  let avgdg ((2 * count links) / count turtles)
-  let avgcl (mean [ nw:clustering-coefficient ] of turtles)
-  if (avgdg > top-degree) [decrease-degree-randomly]
-  if (avgdg < bot-degree) [increase-degree-randomly]
-  set avgdg ((2 * count links) / count turtles)
-  if (avgdg < bot-degree) [increase-degree-randomly]
-  if (avgcl > top-clust) [decrease-clustering-randomly]
-  if (avgcl < bot-clust) [increase-clustering-randomly increase-clustering-randomly2]
-  set avgcl (mean [ nw:clustering-coefficient ] of turtles)
-  if ((((bot-degree < avgdg) and (avgdg < top-degree)) and (bot-clust < avgcl)) and (avgcl < top-clust)) [save-clustering-degree stop]
-  tick
-  if (ticks > 800) [save-clustering-degree stop]
-end
-
-to setup-clustering
-  let top-clust (Approx-M-L-Clustering + random-float 0.03)
-  let bot-clust (Approx-M-L-Clustering - random-float 0.03)
-  set Q 0
-  while [Q = 0][
-    let avgcl (mean [ nw:clustering-coefficient ] of turtles)
-    while [avgcl > top-clust] [
-      decrease-clustering-randomly
-      set avgcl (mean [ nw:clustering-coefficient ] of turtles)]
-     while [avgcl < bot-clust] [
-      increase-clustering-randomly
-      increase-clustering-randomly2
-      set avgcl (mean [ nw:clustering-coefficient ] of turtles)]
-    if ((bot-clust < avgcl) and (avgcl < top-clust)) [set Q 1]
-  ]
-end
-
-to setup-degree
-  let top-degree (Approx-Average-Degree + random-float 1)
-  let bot-degree (Approx-Average-Degree - random-float 1)
-  set Q 0
-  while [Q = 0][
-    let avgdg ((2 * count links) / count turtles)
-   while [avgdg > top-degree] [
-      decrease-degree-randomly
-      set avgdg ((2 * count links) / count turtles)]
-    while [avgdg < bot-degree] [
-      increase-degree-randomly
-      set avgdg ((2 * count links) / count turtles)]
-    if ((bot-degree < avgdg) and (avgdg < top-degree)) [set Q 1]
-  ]
-end
-
-to save-clustering-degree
-  let avgdg ((2 * count links) / count turtles)
-  let avgdg/nodes ((2 * count links) / (count turtles ^ 2 ))
-  let avgcl (mean [ nw:clustering-coefficient ] of turtles)
-  let n.ticks ticks
-  file-open "clustering-degree.csv"
-  file-print (list ("") (num-nodes) (n.ticks) (avgdg) (avgdg/nodes) (Approx-Average-Degree) (avgcl) (Approx-M-L-Clustering) (""))
-  file-close
-end
-
-; Generalized Segregation
 
 to setup-segregation
-
+  reset-ticks
+  ask turtles [
+    ifelse (random-float 100 < %-blue) [set color blue] [set color red]
+    set my-%-similar-wanted random %-similar-wanted ]
+  update-turtles
+  update-globals
 end
 
+to go-segregation
+  if all? turtles [happy?] [ stop ]
+  relink-unhappy-turtles
+  update-turtles
+  update-globals
+  tick
+end
+
+to relink-unhappy-turtles
+  ask turtles with [ not happy? ]
+  [set L (count my-links)
+   ask my-links [die]
+    while [count my-links < L] [create-link-with one-of other turtles]]
+end
+
+to update-turtles
+  ask turtles [
+
+    set L (count (link-neighbors))
+    ;; in next two lines, we use "neighbors" to test the eight patches
+    ;; surrounding the current patch
+
+    ;; count the number of my neighbors that are the same color as me
+    set similar-nearby count (link-neighbors)
+      with [color = [color] of myself]
+
+    ;; count the total number of my neighbors
+    set total-nearby count (link-neighbors)
+
+    ;; count the number of my neighbors that are a different color than me
+    set other-nearby count (link-neighbors)
+      with [color != [color] of myself]
+
+    ;; I’m happy if there are at least the minimal number of same-colored and different colored neighbors
+    ; Turtles with no friends will be happyby default (total-nearby = 0)
+    set happy? similar-nearby >= ( my-%-similar-wanted * total-nearby / 100 )
+                 and other-nearby >= ( %-different-wanted * total-nearby / 100 )
+  ]
+end
+
+to update-globals
+  let similar-neighbors sum [similar-nearby] of turtles
+  let total-neighbors sum [total-nearby] of turtles
+  set percent-similar (similar-neighbors / total-neighbors) * 100
+  set percent-unhappy (count turtles with [not happy?]) / (count turtles) * 100
+end
 
 ; LAYOUT
 to layout
@@ -589,7 +442,7 @@ num-nodes
 num-nodes
 2
 500
-40.0
+113.0
 1
 1
 NIL
@@ -621,7 +474,7 @@ num-links
 num-links
 0
 1000
-51.0
+91.0
 1
 1
 NIL
@@ -653,7 +506,7 @@ link-prob
 link-prob
 0
 0.5
-0.02
+0.04
 0.01
 1
 NIL
@@ -882,20 +735,20 @@ Network Formation
 1
 
 TEXTBOX
-1431
-19
-1581
-49
+1541
+10
+1691
+40
 Difussion
 25
 0.0
 1
 
 SLIDER
-1430
-52
-1641
-85
+1540
+43
+1751
+76
 virus-check-frequency
 virus-check-frequency
 0
@@ -907,10 +760,10 @@ ticks
 HORIZONTAL
 
 BUTTON
-1434
-263
-1549
-296
+1544
+254
+1659
+287
 Setup
 setup-diff
 NIL
@@ -924,10 +777,10 @@ NIL
 1
 
 SLIDER
-1430
-87
-1641
-120
+1540
+78
+1751
+111
 initial-outbreak-size
 initial-outbreak-size
 0
@@ -939,10 +792,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-1432
-157
-1642
-190
+1542
+148
+1752
+181
 virus-spread-chance
 virus-spread-chance
 0
@@ -954,10 +807,10 @@ virus-spread-chance
 HORIZONTAL
 
 SLIDER
-1431
-122
-1641
-155
+1541
+113
+1751
+146
 recovery-chance
 recovery-chance
 2
@@ -969,10 +822,10 @@ recovery-chance
 HORIZONTAL
 
 SLIDER
-1432
-192
-1643
-225
+1542
+183
+1753
+216
 gain-resistance-chance
 gain-resistance-chance
 0
@@ -984,10 +837,10 @@ gain-resistance-chance
 HORIZONTAL
 
 BUTTON
-1550
-263
-1643
-296
+1661
+254
+1754
+287
 Go
 diff
 T
@@ -1001,10 +854,10 @@ NIL
 1
 
 PLOT
-1434
-300
-1895
-566
+1544
+291
+2005
+557
 Network Status
 time
 % of nodes
@@ -1022,10 +875,10 @@ PENS
 "Dead" 1.0 0 -16777216 true "" "plot (count turtles with [not alive?]) / (count turtles) * 100"
 
 BUTTON
-1438
-624
-1557
-657
+1548
+615
+1667
+648
 SETUP & GO
 ifelse (Net = 0) [setupER2] [setupPA]\nsetup-diff\ndiff\n
 NIL
@@ -1039,10 +892,10 @@ NIL
 1
 
 SLIDER
-1437
-588
-1588
-621
+1547
+579
+1698
+612
 Net
 Net
 0
@@ -1054,20 +907,20 @@ NIL
 HORIZONTAL
 
 TEXTBOX
-1437
-569
-1587
-591
+1547
+560
+1697
+582
 To Simulate Difussion
 13
 0.0
 1
 
 SLIDER
-1433
-228
-1643
-261
+1543
+219
+1753
+252
 death-chance
 death-chance
 0
@@ -1088,140 +941,6 @@ precision global-clustering-coefficient 5
 17
 1
 11
-
-SLIDER
-693
-409
-860
-442
-Approx-Average-Degree
-Approx-Average-Degree
-0
-60
-40.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-693
-445
-860
-478
-Approx-M-L-Clustering
-Approx-M-L-Clustering
-0
-1
-0.39
-0.01
-1
-NIL
-HORIZONTAL
-
-BUTTON
-696
-554
-911
-587
-NIL
-setup-clustering-degree
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-699
-660
-911
-693
-NIL
-setup-clustering
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-697
-590
-911
-623
-NIL
-setup-degree
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-BUTTON
-698
-625
-911
-658
-NIL
-setup-clustering-degree2
-NIL
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-PLOT
-699
-695
-1199
-985
-Degree and Clustering
-NIL
-NIL
-0.0
-10.0
-0.0
-1.0
-true
-true
-"" ""
-PENS
-"Avg Clustering" 1.0 0 -2674135 true "" "plot precision (mean [ nw:clustering-coefficient ] of turtles) 5"
-"Avg Degree / 100" 1.0 0 -13345367 true "" "plot (precision ((2 * count links) / count turtles) 3) / 100"
-
-BUTTON
-695
-518
-910
-551
-NIL
-setup-clustering-degree3
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
 
 BUTTON
 225
@@ -1250,33 +969,6 @@ precision ((2 * count links) / (count turtles ^ 2 )) 3
 17
 1
 11
-
-BUTTON
-694
-481
-909
-514
-NIL
-setup-clustering-degree4
-T
-1
-T
-OBSERVER
-NIL
-NIL
-NIL
-NIL
-1
-
-TEXTBOX
-696
-370
-846
-406
-Clustering vs Degree
-15
-0.0
-1
 
 TEXTBOX
 878
@@ -1480,23 +1172,143 @@ SLIDER
 83
 1299
 116
-red-blue-proportion
-red-blue-proportion
+%-blue
+%-blue
 0
-1
-0.5
-0.1
+100
+50.0
+50
 1
 NIL
 HORIZONTAL
 
 BUTTON
-1103
-155
-1270
-188
+1109
+263
+1247
+296
 Setup Segregation
 setup-segregation
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+1106
+119
+1301
+152
+%-similar-wanted
+%-similar-wanted
+0
+100
+46.0
+1
+1
+%
+HORIZONTAL
+
+SLIDER
+1106
+155
+1303
+188
+%-different-wanted
+%-different-wanted
+0
+100
+34.0
+1
+1
+%
+HORIZONTAL
+
+BUTTON
+1249
+263
+1312
+296
+Go
+go-segregation
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+1108
+190
+1305
+223
+n-neighbors
+n-neighbors
+0
+25
+10.0
+1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+1110
+298
+1223
+343
+Percent Similar
+percent-similar
+17
+1
+11
+
+MONITOR
+1226
+298
+1350
+343
+Percent Unhappy
+percent-unhappy
+17
+1
+11
+
+PLOT
+1109
+345
+1510
+624
+Percentages
+Time
+%
+0.0
+25.0
+0.0
+100.0
+true
+true
+"" ""
+PENS
+"% Similar" 1.0 0 -13345367 true "" "plot percent-similar"
+"% Unhappy" 1.0 0 -2674135 true "" "plot percent-unhappy"
+
+BUTTON
+1108
+227
+1275
+260
+Setup N Neighbors
+setup-n-neighbors
 NIL
 1
 T

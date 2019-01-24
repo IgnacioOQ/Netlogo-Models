@@ -23,9 +23,11 @@ globals [
   Z Y K P Q
 
 ; Segregation Variables
-  percent-similar  ;; on the average, what percent of a turtle's neighbors
-                   ;; are the same color as that turtle?
-  percent-unhappy  ;; what percent of the turtles are unhappy?
+  percent-similar   ;; on the average, what percent of a turtle's neighbors
+                    ;; are the same color as that turtle?
+  percent-unhappy   ;; what percent of the turtles are unhappy?
+  init-avg-clust    ;; just that
+  init-global-clust ;; just that
 ]
 
 ; CREATE NODES
@@ -188,11 +190,10 @@ to setup-n-neighbors
   clear-all
   create-turtles num-nodes [
     set shape "person"
-    setxy random-xcor random-ycor
-  ]
+    setxy random-xcor random-ycor]
   ask turtles [
   set L (n-neighbors)
-  while [count my-links < L] [create-link-with one-of other turtles]]
+  while [count my-links < L] [create-link-with one-of other turtles]] ;this will secure at least n random neighbors for everyone, but possibly more for a few
 end
 
 to setup-segregation
@@ -202,10 +203,18 @@ to setup-segregation
     set my-%-similar-wanted random %-similar-wanted ]
   update-turtles
   update-globals
+  set init-global-clust global-clustering-coefficient
+  set init-avg-clust (mean [ nw:clustering-coefficient ] of turtles)
+  tick
 end
 
 to go-segregation
-  if all? turtles [happy?] [ stop ]
+  if all? turtles [happy?] [
+   save-segregation-data
+    stop ]
+  if (ticks > 150) [
+   save-segregation-data
+    stop ]
   relink-unhappy-turtles
   update-turtles
   update-globals
@@ -250,6 +259,15 @@ to update-globals
   set percent-similar (similar-neighbors / total-neighbors) * 100
   set percent-unhappy (count turtles with [not happy?]) / (count turtles) * 100
 end
+
+to save-segregation-data
+    set init-global-clust global-clustering-coefficient
+  set init-avg-clust (mean [ nw:clustering-coefficient ] of turtles)
+file-open "GenerSegreg2.csv"
+file-print (list ("") (count turtles) (%-blue) (link-prob) (%-similar-wanted) (%-different-wanted) (percent-similar) (percent-unhappy) (ticks) (init-global-clust) (global-clustering-coefficient) (init-avg-clust) (mean [ nw:clustering-coefficient ] of turtles) (""))
+file-close
+end
+
 
 ; LAYOUT
 to layout
@@ -330,7 +348,7 @@ end
 
 to diff
   if (all? turtles [not infected?])
-    [ save-data
+    [ save-difussion-data
       stop ]
   ask turtles
   [set virus-check-timer virus-check-timer + 1
@@ -341,7 +359,7 @@ to diff
   tick
 end
 
-to save-data
+to save-difussion-data
 let suceptible ((count turtles with [not infected? and not resistant?]) / (count turtles) * 100)
 let resistant ((count turtles with [resistant?]) / (count turtles) * 100)
 let avgd (precision (count links / num-nodes) 3)
@@ -352,18 +370,21 @@ file-close
 end
 
 to become-infected  ;; turtle procedure
+  set alive? true
   set infected? true
   set resistant? false
   set color red
 end
 
 to become-susceptible  ;; turtle procedure
+  set alive? true
   set infected? false
   set resistant? false
   set color blue
 end
 
 to become-resistant  ;; turtle procedure
+  set alive? true
   set infected? false
   set resistant? true
   set color green
@@ -378,18 +399,18 @@ to become-dead
 end
 
 to spread-virus
-  ask turtles with [infected?]
+  ask turtles with [infected? and alive?]
     [ if random-float 100 < death-chance
       [ become-dead ]]
 
   ask turtles with [infected?]
-      [ask link-neighbors with [not resistant?]
+      [ask link-neighbors with [(not resistant?) and (alive?)]
         [ if random-float 100 < virus-spread-chance
             [ become-infected ] ] ]
 end
 
 to do-virus-checks
-  ask turtles with [infected? and virus-check-timer = 0]
+  ask turtles with [(infected? and virus-check-timer = 0) and alive?]
   [
     if random 100 < recovery-chance
     [
@@ -442,7 +463,7 @@ num-nodes
 num-nodes
 2
 500
-113.0
+227.0
 1
 1
 NIL
@@ -753,7 +774,7 @@ virus-check-frequency
 virus-check-frequency
 0
 20
-1.0
+0.0
 1
 1
 ticks
@@ -800,7 +821,7 @@ virus-spread-chance
 virus-spread-chance
 0
 10.0
-5.1
+3.1
 0.1
 1
 %
@@ -830,7 +851,7 @@ gain-resistance-chance
 gain-resistance-chance
 0
 100
-2.0
+23.0
 1
 1
 %
@@ -869,9 +890,9 @@ true
 true
 "" ""
 PENS
-"Suceptible" 1.0 0 -13345367 true "" "plot (count turtles with [not infected? and not resistant?]) / (count turtles) * 100"
-"Infected" 1.0 0 -2674135 true "" "plot (count turtles with [infected?]) / (count turtles) * 100"
-"Resistant" 1.0 0 -13210332 true "" "plot (count turtles with [resistant?]) / (count turtles) * 100"
+"Suceptible" 1.0 0 -13345367 true "" "plot (count turtles with [(not infected? and not resistant?) and alive?]) / (count turtles) * 100"
+"Infected" 1.0 0 -2674135 true "" "plot (count turtles with [infected? and alive?]) / (count turtles) * 100"
+"Resistant" 1.0 0 -13210332 true "" "plot (count turtles with [resistant? and alive?]) / (count turtles) * 100"
 "Dead" 1.0 0 -16777216 true "" "plot (count turtles with [not alive?]) / (count turtles) * 100"
 
 BUTTON
@@ -925,7 +946,7 @@ death-chance
 death-chance
 0
 20
-1.0
+0.0
 1
 1
 %
@@ -1021,8 +1042,8 @@ rewire-prob
 rewire-prob
 0
 1
-0.0
-0.1
+0.05
+0.01
 1
 NIL
 HORIZONTAL
@@ -1208,7 +1229,7 @@ SLIDER
 %-similar-wanted
 0
 100
-46.0
+49.0
 1
 1
 %
@@ -1223,7 +1244,7 @@ SLIDER
 %-different-wanted
 0
 100
-34.0
+47.0
 1
 1
 %
@@ -1255,7 +1276,7 @@ n-neighbors
 n-neighbors
 0
 25
-10.0
+6.0
 1
 1
 NIL
@@ -1318,6 +1339,72 @@ NIL
 NIL
 NIL
 1
+
+MONITOR
+1317
+84
+1410
+129
+Blue Turtles
+count turtles with [color = blue]
+17
+1
+11
+
+MONITOR
+1317
+130
+1410
+175
+Red Turtles
+count turtles with [color = red]
+17
+1
+11
+
+MONITOR
+1760
+102
+1841
+147
+Suceptible
+(count turtles with [(not infected? and not resistant?) and (alive?)])
+17
+1
+11
+
+MONITOR
+1760
+149
+1842
+194
+Infected
+(count turtles with [infected? and alive?])
+17
+1
+11
+
+MONITOR
+1760
+196
+1843
+241
+Resistant
+(count turtles with [resistant? and alive?])
+17
+1
+11
+
+MONITOR
+1760
+243
+1843
+288
+Dead
+(count turtles with [not alive?])
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?

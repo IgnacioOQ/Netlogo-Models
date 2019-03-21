@@ -102,7 +102,9 @@ end
 to setupGPA
 clear-all
 reset-ticks
-create-turtles (n-links2) [set shape "person"]
+create-turtles (n-links2) [
+    create-links-with other turtles
+    set shape "person"]
 create-turtles 1 [
     set shape "person"
     create-links-with other turtles ]
@@ -121,6 +123,70 @@ to make-node2
       [create-link-with one-of other turtles]
       [let k [who] of find-partner
         if (k != [who] of self)[create-link-with turtle k]]]]
+end
+
+to setupGPA2
+clear-all
+reset-ticks
+create-turtles (n-links2) [
+    create-links-with other turtles
+    set shape "person"]
+create-turtles 1 [
+    set shape "person"
+    create-links-with other turtles ]
+let n (iterations - 1)
+while [n > 0][
+    make-node3
+    set n (n - 1)]
+ask turtles [setxy random-xcor random-ycor]
+rewire-links
+end
+
+to make-node3
+ create-turtles 1 [
+    set shape "person"
+    while [count my-links < n-links2] [
+    let k [who] of find-partner
+    if (k != [who] of self) [create-link-with turtle k]]]
+end
+
+to rewire-links
+ask turtles [
+    let k count link-neighbors
+    let m [ who ] of self
+    ask link-neighbors with [ who > [ who ] of myself ] [
+      let n [ who ] of self
+      if random-float 1.0 < rewire-prob [
+        ask link m n [die]]]
+   while [ count link-neighbors < k] [
+      create-link-with one-of other turtles ]]
+end
+
+to setupGPA3
+clear-all
+reset-ticks
+create-turtles (n-links2) [
+    create-links-with other turtles
+    set shape "person"]
+create-turtles 1 [
+    set shape "person"
+    create-links-with other turtles ]
+let n (iterations - 1)
+while [n > 0][
+    make-node3
+    set n (n - 1)]
+ask turtles [setxy random-xcor random-ycor]
+rewire-links2
+end
+
+to rewire-links2
+  ask links [set color blue]
+  let k (round ((count links) * rewire-prob))
+  let m count links
+  while [count links > m - k][ask one-of links with [color = blue] [die]]
+  while [count links with [color = grey] < k] [
+    ask one-of turtles [create-link-with one-of other turtles]]
+  ask links [set color grey]
 end
 
 ; Small World
@@ -160,7 +226,7 @@ to wire-them
   let n 0
   while [n < count turtles][
     let m 0
-    while [m < n-links2] [
+    while [m < n-links] [
     ;; make edges with the next two neighbors
     ;; this makes a lattice with average degree of 4
     set m m + 1
@@ -313,9 +379,10 @@ let norm-influencer-Bcentrality (normalize-Bcentrality (mean [ nw:betweenness-ce
 let influencer-Ccentrality (mean [ nw:closeness-centrality ] of turtles with [influencer?])
 let influencer-page-rank (mean [ nw:page-rank ] of turtles with [influencer?])
 ; Now we paste the information in our data set
-file-open "EmotionalContagion-ER.csv"
+if (Network-Type = "GPA")[file-open "EmotionalContagion-GPA.csv"]
+if (Network-Type = "WS")[file-open "EmotionalContagion-WS3.csv"]
 file-print
-(list ("") (count turtles) (count links) (Network-Type) (influencers-recover?) (per.infected) (per.resistant) (initial-influencer-size) (recovery-chance) (virus-spread-chance) (gain-resistance-chance) (rewire-prob)
+(list ("") (count turtles) (count links) (Network-Type) (influencers-recover?) (per.infected) (per.resistant) (initial-influencer-size) (recovery-chance) (virus-spread-chance) (gain-resistance-chance) (rewire-prob) (n-links2)
     (ticks) (avgd) (glcc) (avg-path-lenght) (influencer-Ecentrality) (influencer-Ccentrality) (influencer-page-rank) (influencer-norm-degree) (norm-influencer-Bcentrality) (""))
 file-close
 end
@@ -324,8 +391,8 @@ end
 to-report normalize-Bcentrality [Bcentrality]
   let inf (min [ nw:betweenness-centrality ] of turtles)
   let sup (max [ nw:betweenness-centrality ] of turtles)
-  ifelse (sup - inf = 0)
-  [report "Error"]
+  ifelse (sup - inf < 0.0001) ; This is because variability in the approximation of the underlying algorithm. Ideally, this should be "= 0".
+  [report 1 / (count turtles)] ; If all nodes have the same centrality, then its uniformly distributed
   [report ((Bcentrality - inf) / (sup - inf))]
 end
 @#$#@#$#@
@@ -365,7 +432,7 @@ num-nodes
 num-nodes
 2
 500
-500.0
+5.0
 1
 1
 NIL
@@ -429,7 +496,7 @@ link-prob
 link-prob
 0
 0.5
-0.1
+0.04
 0.01
 1
 NIL
@@ -697,7 +764,7 @@ virus-spread-chance
 virus-spread-chance
 0
 15
-3.0
+1.0
 0.1
 1
 %
@@ -712,7 +779,7 @@ recovery-chance
 recovery-chance
 0
 15
-8.0
+1.0
 0.1
 1
 %
@@ -727,7 +794,7 @@ gain-resistance-chance
 gain-resistance-chance
 0
 100
-0.0
+1.0
 1
 1
 %
@@ -834,7 +901,7 @@ n-links
 n-links
 0
 20
-3.0
+6.0
 1
 1
 NIL
@@ -849,7 +916,7 @@ rewire-prob
 rewire-prob
 0
 1
-0.0
+0.75
 0.01
 1
 NIL
@@ -1125,7 +1192,7 @@ CHOOSER
 Network-Type
 Network-Type
 "ER" "PA" "GPA" "RG" "WS"
-0
+4
 
 MONITOR
 1290
@@ -1158,7 +1225,7 @@ n-links2
 n-links2
 1
 20
-3.0
+11.0
 1
 1
 NIL
@@ -1199,8 +1266,8 @@ SLIDER
 iterations
 iterations
 0
-200
-200.0
+500
+300.0
 1
 1
 NIL
@@ -1216,6 +1283,40 @@ Influencer Normalized Degree
 17
 1
 11
+
+BUTTON
+1096
+300
+1266
+333
+General BA Pref Att 3
+setupGPA3
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+1094
+264
+1266
+297
+General PA Pref Att 2
+setupGPA2
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1597,7 +1698,7 @@ setup-diff</setup>
       <value value="200"/>
     </enumeratedValueSet>
   </experiment>
-  <experiment name="experiment-ER" repetitions="1000" sequentialRunOrder="false" runMetricsEveryStep="false">
+  <experiment name="experiment - ER" repetitions="500" sequentialRunOrder="false" runMetricsEveryStep="false">
     <setup>setupER3
 setup-diff</setup>
     <go>diff</go>
@@ -1606,7 +1707,7 @@ setup-diff</setup>
       <value value="&quot;ER&quot;"/>
     </enumeratedValueSet>
     <steppedValueSet variable="virus-spread-chance" first="1" step="2" last="5"/>
-    <steppedValueSet variable="recovery-chance" first="4" step="4" last="16"/>
+    <steppedValueSet variable="recovery-chance" first="1" step="3" last="10"/>
     <enumeratedValueSet variable="Save-Data">
       <value value="true"/>
     </enumeratedValueSet>
@@ -1614,11 +1715,59 @@ setup-diff</setup>
       <value value="true"/>
       <value value="false"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="num-nodes" first="100" step="100" last="200"/>
+    <steppedValueSet variable="num-nodes" first="100" step="100" last="300"/>
     <enumeratedValueSet variable="initial-influencer-size">
       <value value="1"/>
     </enumeratedValueSet>
-    <steppedValueSet variable="link-prob" first="0.1" step="0.1" last="0.5"/>
+    <steppedValueSet variable="link-prob" first="0.01" step="0.03" last="0.16"/>
+  </experiment>
+  <experiment name="experiment - WS" repetitions="100" sequentialRunOrder="false" runMetricsEveryStep="false">
+    <setup>ws.network
+setup-diff</setup>
+    <go>diff</go>
+    <steppedValueSet variable="gain-resistance-chance" first="0" step="1" last="1"/>
+    <steppedValueSet variable="rewire-prob" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="Network-Type">
+      <value value="&quot;WS&quot;"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="virus-spread-chance" first="1" step="2" last="5"/>
+    <steppedValueSet variable="recovery-chance" first="1" step="3" last="10"/>
+    <enumeratedValueSet variable="Save-Data">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="influencers-recover?">
+      <value value="true"/>
+      <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="num-nodes" first="100" step="100" last="300"/>
+    <enumeratedValueSet variable="initial-influencer-size">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="n-links2" first="1" step="5" last="11"/>
+  </experiment>
+  <experiment name="experiment - GPA" repetitions="100" sequentialRunOrder="false" runMetricsEveryStep="false">
+    <setup>setupGPA3
+setup-diff</setup>
+    <go>diff</go>
+    <steppedValueSet variable="gain-resistance-chance" first="0" step="1" last="1"/>
+    <steppedValueSet variable="rewire-prob" first="0" step="0.25" last="1"/>
+    <enumeratedValueSet variable="Network-Type">
+      <value value="&quot;GPA&quot;"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="virus-spread-chance" first="1" step="2" last="5"/>
+    <steppedValueSet variable="recovery-chance" first="1" step="3" last="10"/>
+    <enumeratedValueSet variable="Save-Data">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="influencers-recover?">
+      <value value="true"/>
+      <value value="false"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="iterations" first="100" step="100" last="300"/>
+    <enumeratedValueSet variable="initial-influencer-size">
+      <value value="1"/>
+    </enumeratedValueSet>
+    <steppedValueSet variable="n-links2" first="1" step="5" last="11"/>
   </experiment>
 </experiments>
 @#$#@#$#@
